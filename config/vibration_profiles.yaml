@@ -1,0 +1,34 @@
+# Vibration harvesting parameter profiles, keyed by olive maturity class.
+# Recommended by app/core/parameters.py based on the maturity class produced
+# by app/core/maturity.py. Editable without touching any code — this is
+# exactly the table Module 4 (Harvesting Parameter Selection) is meant to
+# own, pulled forward here so the MVP dashboard has real numbers to show.
+
+profiles:
+  unripe:
+    label: "Unripe (green)"
+    frequency_hz: 45
+    amplitude_mm: 8
+    duration_s: 3
+    advisory: "Low maturity detected — harvesting this branch now is not recommended."
+
+  turning:
+    label: "Turning (green-yellow)"
+    frequency_hz: 50
+    amplitude_mm: 10
+    duration_s: 4
+    advisory: null
+
+  semi_ripe:
+    label: "Semi-ripe (red-purple)"
+    frequency_hz: 55
+    amplitude_mm: 12
+    duration_s: 5
+    advisory: null
+
+  ripe:
+    label: "Ripe (black)"
+    frequency_hz: 60
+    amplitude_mm: 14
+    duration_s: 6
+    advisory: null

@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Olive Harvester — Control Dashboard</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard.css') }}" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-title">
+      <span class="logo-dot"></span>
+      <h1>Olive Harvester <span class="subtitle">Control Dashboard</span></h1>
+    </div>
+    <div id="status-badge" class="status-badge status-idle">IDLE</div>
+  </header>
+
+  <main class="grid">
+
+    <!-- System status -->
+    <section class="card">
+      <h2>System Status</h2>
+      <dl class="kv">
+        <dt>Status</dt><dd id="sys-status">Idle</dd>
+        <dt>Selected branch</dt><dd id="sys-branch">None</dd>
+        <dt>Last update</dt><dd id="sys-updated">—</dd>
+      </dl>
+    </section>
+
+    <!-- Tree / branch selection -->
+    <section class="card">
+      <h2>Tree / Branch Selection</h2>
+      <p class="hint">Select the branch the operator has positioned in front of the camera.</p>
+      <div id="branch-grid" class="branch-grid"></div>
+    </section>
+
+    <!-- Alerts -->
+    <section class="card">
+      <h2>Alerts</h2>
+      <ul id="alerts-list" class="alerts-list">
+        <li class="alert-empty">No alerts yet.</li>
+      </ul>
+    </section>
+
+    <!-- Camera / image -->
+    <section class="card">
+      <h2>Camera / Image</h2>
+      <div class="camera-frame">
+        <img id="capture-image" alt="Captured branch" style="display:none" />
+        <div id="capture-placeholder" class="camera-placeholder">No image captured yet</div>
+      </div>
+      <button id="btn-capture" class="btn btn-primary" disabled>Capture Image</button>
+    </section>
+
+    <!-- Maturity + recommended parameters + controls -->
+    <section class="card">
+      <h2>Maturity &amp; Harvesting Parameters</h2>
+
+      <div class="maturity-result">
+        <span id="maturity-badge" class="maturity-badge maturity-none">—</span>
+        <span id="maturity-confidence" class="confidence"></span>
+      </div>
+      <p id="param-advisory" class="advisory" style="display:none"></p>
+
+      <div class="param-grid">
+        <label>Frequency (Hz)
+          <input id="param-frequency" type="number" step="0.1" />
+        </label>
+        <label>Amplitude (mm)
+          <input id="param-amplitude" type="number" step="0.1" />
+        </label>
+        <label>Duration (s)
+          <input id="param-duration" type="number" step="0.1" />
+        </label>
+      </div>
+
+      <div class="progress-row">
+        <div class="progress-track">
+          <div id="harvest-progress" class="progress-fill"></div>
+        </div>
+        <span id="progress-label">0.0s / 0.0s</span>
+      </div>
+
+      <div class="btn-row">
+        <button id="btn-start" class="btn btn-success" disabled>Start Harvesting</button>
+        <button id="btn-stop" class="btn btn-danger" disabled>Stop</button>
+      </div>
+    </section>
+
+    <!-- Live monitoring: sensors + mass -->
+    <section class="card">
+      <h2>Live Monitoring</h2>
+      <div class="stat-row">
+        <div class="stat">
+          <span class="stat-value" id="sensor-vibration">0.0</span>
+          <span class="stat-label">Vibration (Hz)</span>
+        </div>
+        <div class="stat">
+          <span class="stat-value" id="sensor-current">0.00</span>
+          <span class="stat-label">Motor current (A)</span>
+        </div>
+      </div>
+      <div class="mass-display">
+        <span id="mass-value" class="mass-value">0.0</span>
+        <span class="mass-unit">g harvested this session</span>
+      </div>
+    </section>
+
+    <!-- Session history -->
+    <section class="card card-wide">
+      <h2>Harvesting Session History</h2>
+      <div class="table-wrap">
+        <table id="history-table">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Branch</th>
+              <th>Maturity</th>
+              <th>Freq (Hz)</th>
+              <th>Amp (mm)</th>
+              <th>Duration (s)</th>
+              <th>Mass (g)</th>
+              <th>Status</th>
+              <th>Ended</th>
+            </tr>
+          </thead>
+          <tbody id="history-body">
+            <tr><td colspan="9" class="empty-row">No sessions recorded yet.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+  </main>
+
+  <div id="toast" class="toast" style="display:none"></div>
+
+  <script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
+</body>
+</html>
