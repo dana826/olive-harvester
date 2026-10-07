@@ -1,0 +1,18 @@
+# Render Blueprint: deploys the dashboard as a public web service.
+services:
+  - type: web
+    name: olive-harvester
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    # One worker on purpose: the harvest state and the background sensor
+    # thread live inside a single process, so extra workers would each run
+    # their own separate (inconsistent) copy.
+    startCommand: gunicorn run:app --workers 1 --threads 4 --bind 0.0.0.0:$PORT
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.3
+      # Optional: set a password so only people you share it with can use the
+      # dashboard. Leave the value empty/remove this entry to make it open.
+      - key: OLIVE_PASSWORD
+        sync: false

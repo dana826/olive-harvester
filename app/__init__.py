@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
-from flask import Flask, render_template
+import hmac
+import os
+
+from flask import Flask, Response, render_template, request
 
 from .config import AppConfig
 from .core.harvest_controller import HarvestController
@@ -29,6 +32,23 @@ def create_app(config: AppConfig | None = None) -> Flask:
     from .api.routes import api_bp
 
     app.register_blueprint(api_bp, url_prefix="/api")
+
+    # Optional access password for public hosting. If the OLIVE_PASSWORD
+    # environment variable is set, every page and API call requires it
+    # (browser shows a login box; the username can be anything).
+    password = os.environ.get("OLIVE_PASSWORD")
+    if password:
+
+        @app.before_request
+        def require_password():
+            auth = request.authorization
+            supplied = (auth.password or "") if auth else ""
+            if not hmac.compare_digest(supplied.encode(), password.encode()):
+                return Response(
+                    "Password required.",
+                    401,
+                    {"WWW-Authenticate": 'Basic realm="Olive Harvester"'},
+                )
 
     @app.route("/")
     def index():

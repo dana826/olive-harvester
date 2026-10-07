@@ -98,3 +98,25 @@ def test_cannot_change_branch_while_harvesting(client):
 def test_alert_resolve_endpoint_is_safe_on_unknown_id(client):
     resp = client.post("/api/alerts/9999/resolve")
     assert resp.status_code == 200
+
+
+def test_password_protection_when_enabled(tmp_path, monkeypatch):
+    import base64
+
+    from app import create_app
+    from app.config import AppConfig
+
+    monkeypatch.setenv("OLIVE_PASSWORD", "s3cret")
+    config = AppConfig()
+    config.data_dir = tmp_path
+    config.capture_dir = tmp_path / "captures"
+    config.db_path = tmp_path / "db" / "olive_harvester.db"
+    client = create_app(config).test_client()
+
+    assert client.get("/api/status").status_code == 401
+
+    bad = base64.b64encode(b"user:wrong").decode()
+    assert client.get("/api/status", headers={"Authorization": f"Basic {bad}"}).status_code == 401
+
+    good = base64.b64encode(b"user:s3cret").decode()
+    assert client.get("/api/status", headers={"Authorization": f"Basic {good}"}).status_code == 200
