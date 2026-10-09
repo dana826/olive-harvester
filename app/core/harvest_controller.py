@@ -28,7 +28,7 @@ from ..hardware.actuator import MockActuator
 from ..hardware.camera import MockCamera
 from ..hardware.sensors import MockSensorArray
 from .maturity import MaturityDetector
-from .parameters import ParameterSelector
+from .parameters import ParameterSelector, check_frequency
 
 
 class SystemStatus(str, Enum):
@@ -154,6 +154,8 @@ class HarvestController:
                 for key in ("frequency_hz", "amplitude_mm", "duration_s"):
                     value = overrides.get(key)
                     if value is not None:
+                        if key == "frequency_hz":
+                            check_frequency(value, "override")
                         active[key] = float(value)
                         has_override = True
             active["operator_override"] = has_override

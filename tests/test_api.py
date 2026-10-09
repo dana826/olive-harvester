@@ -120,3 +120,24 @@ def test_password_protection_when_enabled(tmp_path, monkeypatch):
 
     good = base64.b64encode(b"user:s3cret").decode()
     assert client.get("/api/status", headers={"Authorization": f"Basic {good}"}).status_code == 200
+
+
+def test_profiles_are_inside_motor_range():
+    from pathlib import Path
+    from app.core.parameters import MAX_FREQUENCY_HZ, MIN_FREQUENCY_HZ, ParameterSelector
+
+    selector = ParameterSelector(Path("config/vibration_profiles.yaml"))
+    for name in ("unripe", "turning", "semi_ripe", "ripe", "unknown"):
+        hz = selector.select(name).frequency_hz
+        assert MIN_FREQUENCY_HZ <= hz <= MAX_FREQUENCY_HZ, name
+    ref = selector.select("semi_ripe")
+    assert (ref.frequency_hz, ref.duration_s) == (15, 6)
+
+
+def test_out_of_range_override_rejected(client):
+    branch_id = client.get("/api/branches").get_json()[0]["id"]
+    client.post("/api/select-branch", json={"branch_id": branch_id})
+    client.post("/api/capture")
+    resp = client.post("/api/harvest/start", json={"frequency_hz": 55})
+    assert resp.status_code == 400
+    assert "10-20" in resp.get_json()["error"]

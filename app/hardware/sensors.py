@@ -32,7 +32,7 @@ class MockSensorArray:
             current = round(random.uniform(0.12, 0.20), 2)
             return SensorReading(vibration_hz=vibration, motor_current_a=current, mass_delta_g=0.0)
 
-        target_hz = float(active_params.get("frequency_hz", 50))
+        target_hz = float(active_params.get("frequency_hz", 15))
         vibration = round(target_hz + random.uniform(-1.5, 1.5), 2)
         current = round(1.1 + random.uniform(-0.15, 0.2), 2)
         # ~75% of ticks register olives falling into the collection tray.

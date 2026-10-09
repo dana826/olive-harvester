@@ -57,6 +57,11 @@ class MaturityDetector:
         best_class = min(distances, key=distances.get)
         sorted_distances = sorted(distances.values())
         best, second = sorted_distances[0], sorted_distances[1]
+        # Colour-match score (field name kept as 'confidence'): 1 - d1/(d1+d2),
+        # where d1, d2 are the RGB distances from the mean olive colour to the
+        # nearest and second-nearest class reference colours. 0.5 means equally
+        # close to both; values near 1 mean a clear match. Clamped to
+        # [0.30, 0.99]. It is a heuristic margin, NOT a calibrated probability.
         confidence = 1.0 - (best / (best + second)) if (best + second) > 0 else 1.0
         confidence = max(self._MIN_CONFIDENCE, min(self._MAX_CONFIDENCE, confidence))
 

@@ -151,7 +151,7 @@ function render(snapshot) {
   if (params) {
     badgeEl.textContent = params.maturity_class.replace("_", " ");
     badgeEl.className = `maturity-badge maturity-${params.maturity_class}`;
-    el("maturity-confidence").textContent = `${Math.round(params.confidence * 100)}% confidence`;
+    el("maturity-confidence").textContent = `${Math.round(params.confidence * 100)}% colour-match score`;
 
     if (!state.harvesting) {
       el("param-frequency").value = params.frequency_hz;

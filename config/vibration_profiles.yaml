@@ -4,31 +4,35 @@
 # exactly the table Module 4 (Harvesting Parameter Selection) is meant to
 # own, pulled forward here so the MVP dashboard has real numbers to show.
 
+# All frequencies must lie inside the motor's design range (10-20 Hz,
+# i.e. 600-1200 rpm); app/core/parameters.py rejects anything outside it.
+# semi_ripe is the 15 Hz / 6 s reference pulse. Amplitude and the per-class
+# frequencies are placeholders until field-tuned.
 profiles:
   unripe:
     label: "Unripe (green)"
-    frequency_hz: 45
+    frequency_hz: 10
     amplitude_mm: 8
-    duration_s: 3
+    duration_s: 6
     advisory: "Low maturity detected — harvesting this branch now is not recommended."
 
   turning:
     label: "Turning (green-yellow)"
-    frequency_hz: 50
+    frequency_hz: 13
     amplitude_mm: 10
-    duration_s: 4
+    duration_s: 6
     advisory: null
 
   semi_ripe:
     label: "Semi-ripe (red-purple)"
-    frequency_hz: 55
+    frequency_hz: 15
     amplitude_mm: 12
-    duration_s: 5
+    duration_s: 6
     advisory: null
 
   ripe:
     label: "Ripe (black)"
-    frequency_hz: 60
+    frequency_hz: 18
     amplitude_mm: 14
     duration_s: 6
     advisory: null

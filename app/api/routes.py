@@ -47,7 +47,7 @@ def start_harvest():
     overrides = {k: data.get(k) for k in ("frequency_hz", "amplitude_mm", "duration_s")}
     try:
         snapshot = _controller().start_harvest(overrides)
-    except RuntimeError as exc:
+    except (RuntimeError, ValueError) as exc:
         return jsonify({"error": str(exc)}), 400
     return jsonify(snapshot)
 
