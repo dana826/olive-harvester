@@ -15,6 +15,7 @@ raise a simulated fault alert — exactly the responsibilities Module 6
 
 from __future__ import annotations
 
+import os
 import random
 import threading
 import time
@@ -83,9 +84,25 @@ class HarvestController:
         self._next_alert_id = 1
         self._last_session: Optional[Dict[str, Any]] = None
 
+        self._thread_lock = threading.Lock()
         self._stop_flag = threading.Event()
-        self._thread = threading.Thread(target=self._tick_loop, daemon=True)
-        self._thread.start()
+        self._thread: Optional[threading.Thread] = None
+        self._thread_pid: Optional[int] = None
+        self._ensure_thread()
+
+    def _ensure_thread(self) -> None:
+        """Start the background tick thread in THIS process if it is not
+        running. Threads do not survive os.fork(), so under a pre-forking
+        server (e.g. gunicorn --preload) the thread started at import time
+        would be missing in the worker; calling this from the request paths
+        restarts it there (and revives it if it ever died)."""
+        with self._thread_lock:
+            alive = self._thread is not None and self._thread.is_alive()
+            if alive and self._thread_pid == os.getpid():
+                return
+            self._thread = threading.Thread(target=self._tick_loop, daemon=True)
+            self._thread_pid = os.getpid()
+            self._thread.start()
 
     # ------------------------------------------------------------------ #
     # Public API — called from app/api/routes.py
@@ -144,6 +161,7 @@ class HarvestController:
         return self.snapshot()
 
     def start_harvest(self, overrides: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        self._ensure_thread()
         with self._lock:
             if self._status != SystemStatus.ASSESSED:
                 raise RuntimeError("Capture and assess a branch before starting harvest.")
@@ -188,6 +206,7 @@ class HarvestController:
         return self._db.fetch_sessions(limit)
 
     def snapshot(self) -> Dict[str, Any]:
+        self._ensure_thread()
         with self._lock:
             return {
                 "status": self._status.value,

@@ -141,3 +141,17 @@ def test_out_of_range_override_rejected(client):
     resp = client.post("/api/harvest/start", json={"frequency_hz": 55})
     assert resp.status_code == 400
     assert "10-20" in resp.get_json()["error"]
+
+
+def test_tick_thread_restarts_after_fork(client):
+    """Under gunicorn --preload the thread started at import time does not
+    exist in the forked worker; the controller must restart it on demand."""
+    import os
+
+    controller = client.application.extensions["controller"]
+    controller._thread_pid = -1  # simulate "thread belongs to another process"
+    old_thread = controller._thread
+    client.get("/api/status")
+    assert controller._thread_pid == os.getpid()
+    assert controller._thread is not old_thread
+    assert controller._thread.is_alive()
