@@ -31,10 +31,9 @@ from PIL import Image, ImageDraw
 # "detector" intentionally share knowledge (real reference colors would
 # play the same role once a real camera is in use).
 CLASS_COLORS = {
-    "unripe": (60, 140, 50),      # green
-    "turning": (150, 140, 60),    # yellow-green
-    "semi_ripe": (140, 70, 55),   # reddish-purple
-    "ripe": (35, 25, 25),         # near-black
+    "unripe": (60, 140, 50),      # green          (C0)
+    "semi_ripe": (140, 70, 55),   # reddish-purple (C2)
+    "ripe": (35, 25, 25),         # near-black     (C4)
 }
 BACKGROUND_COLOR = (235, 235, 230)
 BRANCH_COLOR = (101, 67, 33)

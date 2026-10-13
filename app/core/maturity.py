@@ -3,7 +3,7 @@
 This is a genuine (if simple) color-based classifier, not a random
 number generator standing in for one: it loads the JPEG MockCamera saved,
 masks out background/branch pixels, measures the mean color of what's
-left, and picks the nearest of four reference maturity colors. It never
+left, and picks the nearest of three reference maturity colors (C0, C2, C4). It never
 reads MockCamera's hidden "ground truth" hint. When a real camera and/or
 a trained model are available, MaturityDetector.detect() is the one
 method to replace — ParameterSelector and HarvestController only depend

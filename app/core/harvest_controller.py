@@ -165,6 +165,7 @@ class HarvestController:
                 "duration_s": params.duration_s,
                 "label": params.label,
                 "advisory": params.advisory,
+                "code": params.code,
                 "pulse_enabled": params.harvestable,
                 "override_frequency_hz": (params.override or {}).get("frequency_hz"),
             }

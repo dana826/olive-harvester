@@ -200,7 +200,6 @@ body {
 
 .maturity-none      { background: var(--status-idle); }
 .maturity-unripe    { background: #65a30d; }
-.maturity-turning   { background: #ca8a04; }
 .maturity-semi_ripe { background: #b91c1c; }
 .maturity-ripe      { background: #1c1917; }
 .maturity-unknown   { background: #6b7280; }

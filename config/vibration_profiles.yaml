@@ -1,45 +1,45 @@
 # Vibration harvesting parameter profiles, keyed by olive maturity class.
 # Recommended by app/core/parameters.py based on the maturity class produced
-# by app/core/maturity.py. Editable without touching any code — this is
-# exactly the table Module 4 (Harvesting Parameter Selection) is meant to
-# own, pulled forward here so the MVP dashboard has real numbers to show.
-
+# by app/core/maturity.py. Editable without touching any code.
+#
+# Classes follow the paper (Macoretta et al. colour classes C0, C2, C4).
+# Starting frequency (paper, Eq. 1):  f_start = 15 Hz * sqrt(F_d / 4.63 N)
+#   C4 (ripe)       13.4 Hz
+#   C2 (semi-ripe)  15.0 Hz   <- reference pulse: 15 Hz, 6 s
+#   C0 (unripe)     17.0 Hz   <- operator override only (not harvested)
 # All frequencies must lie inside the motor's design range (10-20 Hz,
 # i.e. 600-1200 rpm); app/core/parameters.py rejects anything outside it.
-# semi_ripe is the 15 Hz / 6 s reference pulse. Amplitude and the per-class
-# frequencies are placeholders until field-tuned.
+# Amplitudes are placeholders until field-tuned.
 #
-# A profile with `harvestable: false` (unripe) is NOT harvested automatically:
-# the dashboard shows the advisory and waits for operator confirmation. Only
-# if the operator confirms is the `override` pulse started; otherwise the
-# cycle ends as "not attempted" with no frequency/duration recorded.
+# A profile with `harvestable: false` (unripe, C0) is NOT harvested
+# automatically: the dashboard shows the advisory and waits for operator
+# confirmation. Only if the operator confirms is the `override` pulse
+# started; otherwise the cycle ends as "not attempted" with no
+# frequency/duration recorded.
+
 profiles:
   unripe:
+    code: C0
     label: "Unripe (green)"
     harvestable: false
     advisory: "Advisory: Unripe olives — not recommended for harvesting"
     override:
-      frequency_hz: 17
+      frequency_hz: 17.0
       amplitude_mm: 8
       duration_s: 6
 
-  turning:
-    label: "Turning (green-yellow)"
-    frequency_hz: 13
-    amplitude_mm: 10
-    duration_s: 6
-    advisory: null
-
   semi_ripe:
+    code: C2
     label: "Semi-ripe (red-purple)"
-    frequency_hz: 15
+    frequency_hz: 15.0
     amplitude_mm: 12
     duration_s: 6
     advisory: null
 
   ripe:
+    code: C4
     label: "Ripe (black)"
-    frequency_hz: 18
+    frequency_hz: 13.4
     amplitude_mm: 14
     duration_s: 6
     advisory: null

@@ -39,6 +39,7 @@ class HarvestParameters:
     advisory: Optional[str] = None
     harvestable: bool = True
     override: Optional[Dict[str, float]] = None
+    code: Optional[str] = None  # paper colour class, e.g. C0 / C2 / C4
 
 
 # Conservative pulse used when the maturity class cannot be determined.
@@ -81,6 +82,7 @@ class ParameterSelector:
                 advisory=profile.get("advisory"),
                 harvestable=False,
                 override=dict(profile["override"]),
+                code=profile.get("code"),
             )
 
         return HarvestParameters(
@@ -89,4 +91,5 @@ class ParameterSelector:
             duration_s=profile["duration_s"],
             label=profile.get("label", maturity_class),
             advisory=profile.get("advisory"),
+            code=profile.get("code"),
         )

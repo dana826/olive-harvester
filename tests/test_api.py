@@ -28,7 +28,7 @@ def test_start_harvest_requires_assessment(client):
 
 
 def test_full_capture_and_harvest_cycle_auto_completes(client, force_class):
-    force_class("turning")
+    force_class("semi_ripe")
     branch_id = client.get("/api/branches").get_json()[0]["id"]
 
     resp = client.post("/api/select-branch", json={"branch_id": branch_id})
@@ -40,7 +40,9 @@ def test_full_capture_and_harvest_cycle_auto_completes(client, force_class):
     snapshot = resp.get_json()
     assert snapshot["status"] == "assessed"
     params = snapshot["parameters"]
-    assert params["maturity_class"] == "turning"
+    assert params["maturity_class"] == "semi_ripe"
+    assert params["code"] == "C2"
+    assert params["frequency_hz"] == 15.0
     assert params["frequency_hz"] > 0
     assert snapshot["capture"]["image_url"].startswith("/api/captures/")
 
@@ -68,7 +70,7 @@ def test_full_capture_and_harvest_cycle_auto_completes(client, force_class):
 
 
 def test_manual_stop_ends_session_early(client, force_class):
-    force_class("turning")
+    force_class("semi_ripe")
     branch_id = client.get("/api/branches").get_json()[0]["id"]
     client.post("/api/select-branch", json={"branch_id": branch_id})
     client.post("/api/capture")
@@ -86,7 +88,7 @@ def test_manual_stop_ends_session_early(client, force_class):
 
 
 def test_cannot_change_branch_while_harvesting(client, force_class):
-    force_class("turning")
+    force_class("semi_ripe")
     branches = client.get("/api/branches").get_json()
     client.post("/api/select-branch", json={"branch_id": branches[0]["id"]})
     client.post("/api/capture")
@@ -130,7 +132,7 @@ def test_profiles_are_inside_motor_range():
     from app.core.parameters import MAX_FREQUENCY_HZ, MIN_FREQUENCY_HZ, ParameterSelector
 
     selector = ParameterSelector(Path("config/vibration_profiles.yaml"))
-    for name in ("turning", "semi_ripe", "ripe", "unknown"):
+    for name in ("semi_ripe", "ripe", "unknown"):
         hz = selector.select(name).frequency_hz
         assert MIN_FREQUENCY_HZ <= hz <= MAX_FREQUENCY_HZ, name
     unripe = selector.select("unripe")
@@ -138,11 +140,14 @@ def test_profiles_are_inside_motor_range():
     assert unripe.frequency_hz is None and unripe.duration_s is None  # no pulse planned
     assert unripe.override["frequency_hz"] == 17
     ref = selector.select("semi_ripe")
-    assert (ref.frequency_hz, ref.duration_s) == (15, 6)
+    assert (ref.frequency_hz, ref.duration_s) == (15.0, 6)
+    # Paper, Eq. (1): C4 13.4 Hz, C2 15.0 Hz, C0 17.0 Hz (override only).
+    assert selector.select("ripe").frequency_hz == 13.4
+    assert (ref.code, selector.select("ripe").code, unripe.code) == ("C2", "C4", "C0")
 
 
 def test_out_of_range_override_rejected(client, force_class):
-    force_class("turning")
+    force_class("semi_ripe")
     branch_id = client.get("/api/branches").get_json()[0]["id"]
     client.post("/api/select-branch", json={"branch_id": branch_id})
     client.post("/api/capture")
@@ -236,11 +241,11 @@ def test_unripe_override_starts_17_hz_pulse(client, force_class):
 
 
 def test_confirm_override_rejected_when_nothing_pending(client, force_class):
-    force_class("turning")
+    force_class("semi_ripe")
     assert client.post("/api/harvest/confirm-override").status_code == 400
     branch_id = client.get("/api/branches").get_json()[0]["id"]
     client.post("/api/select-branch", json={"branch_id": branch_id})
-    client.post("/api/capture")  # turning -> normal ASSESSED path
+    client.post("/api/capture")  # semi_ripe -> normal ASSESSED path
     assert client.post("/api/harvest/confirm-override").status_code == 400
 
 
@@ -250,3 +255,9 @@ def test_capture_and_branch_change_locked_while_awaiting_confirmation(client, fo
     other = client.get("/api/branches").get_json()[1]["id"]
     assert client.post("/api/select-branch", json={"branch_id": other}).status_code == 400
     client.post("/api/harvest/stop")  # cleanup (declines)
+
+
+def test_only_the_paper_classes_are_produced(client):
+    from app.hardware.camera import CLASS_COLORS
+
+    assert set(CLASS_COLORS) == {"unripe", "semi_ripe", "ripe"}

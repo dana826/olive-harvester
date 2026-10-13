@@ -161,7 +161,8 @@ function render(snapshot) {
   const badgeEl = el("maturity-badge");
   const advisoryEl = el("param-advisory");
   if (params) {
-    badgeEl.textContent = params.maturity_class.replace("_", " ");
+    badgeEl.textContent =
+      params.maturity_class.replace("_", " ") + (params.code ? ` (${params.code})` : "");
     badgeEl.className = `maturity-badge maturity-${params.maturity_class}`;
     el("maturity-confidence").textContent = `${Math.round(params.confidence * 100)}% colour-match score`;
 
