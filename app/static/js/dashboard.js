@@ -49,7 +49,7 @@ function renderBranches(selected) {
     btn.className = "branch-btn" + (b.id === selected ? " selected" : "");
     btn.textContent = b.id;
     btn.title = b.label;
-    btn.disabled = state.harvesting === true;
+    btn.disabled = state.locked === true;
     btn.addEventListener("click", () => selectBranch(b.id));
     grid.appendChild(btn);
   });
@@ -97,6 +97,15 @@ async function doStart() {
   }
 }
 
+async function doConfirmOverride() {
+  try {
+    const snapshot = await api("/harvest/confirm-override", { method: "POST" });
+    render(snapshot);
+  } catch (err) {
+    showToast(err.message);
+  }
+}
+
 async function doStop() {
   try {
     const snapshot = await api("/harvest/stop", { method: "POST" });
@@ -123,12 +132,15 @@ async function resolveAlert(id) {
 function render(snapshot) {
   const status = snapshot.status;
   state.harvesting = status === "harvesting";
+  // Branch selection / capture are locked while harvesting or while an
+  // unripe override is waiting for the operator's decision.
+  state.locked = status === "harvesting" || status === "awaiting_confirmation";
 
   // Status badge + system status card
   const badge = el("status-badge");
-  badge.textContent = status.toUpperCase();
+  badge.textContent = status.replace(/_/g, " ").toUpperCase();
   badge.className = `status-badge status-${status}`;
-  el("sys-status").textContent = status.charAt(0).toUpperCase() + status.slice(1);
+  el("sys-status").textContent = (status.charAt(0).toUpperCase() + status.slice(1)).replace(/_/g, " ");
   el("sys-branch").textContent = snapshot.current_branch || "None";
   el("sys-updated").textContent = new Date(snapshot.timestamp).toLocaleTimeString();
 
@@ -136,7 +148,7 @@ function render(snapshot) {
   renderBranches(snapshot.current_branch);
 
   // Camera / capture
-  el("btn-capture").disabled = !snapshot.current_branch || status === "harvesting";
+  el("btn-capture").disabled = !snapshot.current_branch || state.locked;
   if (snapshot.capture) {
     const img = el("capture-image");
     img.src = snapshot.capture.image_url + `?t=${Date.now()}`;
@@ -154,9 +166,10 @@ function render(snapshot) {
     el("maturity-confidence").textContent = `${Math.round(params.confidence * 100)}% colour-match score`;
 
     if (!state.harvesting) {
-      el("param-frequency").value = params.frequency_hz;
-      el("param-amplitude").value = params.amplitude_mm;
-      el("param-duration").value = params.duration_s;
+      // Blank when no pulse is planned (unripe, until the operator confirms).
+      el("param-frequency").value = params.frequency_hz ?? "";
+      el("param-amplitude").value = params.amplitude_mm ?? "";
+      el("param-duration").value = params.duration_s ?? "";
     }
 
     if (params.advisory) {
@@ -175,8 +188,19 @@ function render(snapshot) {
   el("btn-start").disabled = status !== "assessed";
   el("btn-stop").disabled = status !== "harvesting";
   ["param-frequency", "param-amplitude", "param-duration"].forEach((id) => {
-    el(id).disabled = state.harvesting;
+    el(id).disabled = state.locked;
   });
+
+  // Unripe override confirmation panel
+  const conf = snapshot.confirmation;
+  const box = el("override-box");
+  if (conf && conf.required) {
+    box.style.display = "block";
+    el("override-hz").textContent = conf.override_frequency_hz;
+    el("override-countdown").textContent = Math.ceil(conf.remaining_s);
+  } else {
+    box.style.display = "none";
+  }
 
   // Progress bar
   const target = snapshot.target_duration_s || 0;
@@ -242,11 +266,11 @@ function renderHistory(rows) {
       <td>${r.id}</td>
       <td>${r.branch_id}</td>
       <td>${(r.maturity_class || "").replace("_", " ")}</td>
-      <td>${r.frequency_hz ?? "—"}</td>
-      <td>${r.amplitude_mm ?? "—"}</td>
-      <td>${r.duration_actual_s ?? "—"}</td>
-      <td>${r.harvested_mass_g ?? "—"}</td>
-      <td><span class="status-pill-cell status-pill-${r.status}">${r.status}</span></td>
+      <td>${r.frequency_hz ?? ""}</td>
+      <td>${r.amplitude_mm ?? ""}</td>
+      <td>${r.duration_actual_s ?? ""}</td>
+      <td>${r.harvested_mass_g ?? ""}</td>
+      <td><span class="status-pill-cell status-pill-${r.status}">${(r.status || "").replace(/_/g, " ").replace(/^./, (c) => c.toUpperCase())}</span></td>
       <td>${ended}</td>
     `;
     body.appendChild(tr);
@@ -263,8 +287,11 @@ async function pollStatus() {
   try {
     const snapshot = await api("/status");
     render(snapshot);
-    if (lastStatus === "harvesting" && snapshot.status !== "harvesting") {
-      loadHistory(); // a harvest just auto-completed
+    if (
+      (lastStatus === "harvesting" && snapshot.status !== "harvesting") ||
+      (lastStatus === "awaiting_confirmation" && snapshot.status === "ready")
+    ) {
+      loadHistory(); // a harvest just finished, or an unripe cycle ended "not attempted"
     }
     lastStatus = snapshot.status;
   } catch (err) {
@@ -276,6 +303,8 @@ function init() {
   el("btn-capture").addEventListener("click", doCapture);
   el("btn-start").addEventListener("click", doStart);
   el("btn-stop").addEventListener("click", doStop);
+  el("btn-override").addEventListener("click", doConfirmOverride);
+  el("btn-decline").addEventListener("click", doStop);
 
   loadBranches();
   loadHistory();

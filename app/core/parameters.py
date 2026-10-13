@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional
+from typing import Dict, Optional
 
 import yaml
 
@@ -29,11 +29,22 @@ def check_frequency(value: float, source: str = "frequency_hz") -> float:
 
 @dataclass
 class HarvestParameters:
-    frequency_hz: float
-    amplitude_mm: float
-    duration_s: float
+    # frequency/amplitude/duration are None for a class that is not
+    # harvested automatically (unripe): no pulse is planned until the
+    # operator confirms the override, whose values are in `override`.
+    frequency_hz: Optional[float]
+    amplitude_mm: Optional[float]
+    duration_s: Optional[float]
     label: str
     advisory: Optional[str] = None
+    harvestable: bool = True
+    override: Optional[Dict[str, float]] = None
+
+
+# Conservative pulse used when the maturity class cannot be determined.
+FALLBACK_FREQUENCY_HZ = MIN_FREQUENCY_HZ
+FALLBACK_AMPLITUDE_MM = 8.0
+FALLBACK_DURATION_S = 6.0
 
 
 class ParameterSelector:
@@ -42,21 +53,34 @@ class ParameterSelector:
             data = yaml.safe_load(f) or {}
         self._profiles = data.get("profiles", {})
         for name, profile in self._profiles.items():
-            check_frequency(profile["frequency_hz"], f"profile '{name}'")
+            if profile.get("harvestable", True):
+                check_frequency(profile["frequency_hz"], f"profile '{name}'")
+            else:
+                check_frequency(profile["override"]["frequency_hz"], f"override of '{name}'")
 
     def select(self, maturity_class: str) -> HarvestParameters:
         profile = self._profiles.get(maturity_class)
 
         if profile is None:
-            # Unknown / low-confidence classification: fall back to the
-            # most conservative profile and flag it for the operator.
-            fallback = self._profiles.get("unripe", {})
+            # Unknown / low-confidence classification: use a conservative
+            # pulse and flag it for the operator.
             return HarvestParameters(
-                frequency_hz=fallback.get("frequency_hz", MIN_FREQUENCY_HZ),
-                amplitude_mm=fallback.get("amplitude_mm", 8),
-                duration_s=fallback.get("duration_s", 6),
+                frequency_hz=FALLBACK_FREQUENCY_HZ,
+                amplitude_mm=FALLBACK_AMPLITUDE_MM,
+                duration_s=FALLBACK_DURATION_S,
                 label="Unknown",
                 advisory="Maturity could not be confidently classified — using conservative parameters.",
+            )
+
+        if not profile.get("harvestable", True):
+            return HarvestParameters(
+                frequency_hz=None,
+                amplitude_mm=None,
+                duration_s=None,
+                label=profile.get("label", maturity_class),
+                advisory=profile.get("advisory"),
+                harvestable=False,
+                override=dict(profile["override"]),
             )
 
         return HarvestParameters(

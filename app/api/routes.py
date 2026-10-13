@@ -52,6 +52,16 @@ def start_harvest():
     return jsonify(snapshot)
 
 
+@api_bp.post("/harvest/confirm-override")
+def confirm_override():
+    """Unripe (C0): operator explicitly confirms harvesting despite the advisory."""
+    try:
+        snapshot = _controller().confirm_override()
+    except (RuntimeError, ValueError) as exc:
+        return jsonify({"error": str(exc)}), 400
+    return jsonify(snapshot)
+
+
 @api_bp.post("/harvest/stop")
 def stop_harvest():
     return jsonify(_controller().stop_harvest())

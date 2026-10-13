@@ -8,13 +8,20 @@
 # i.e. 600-1200 rpm); app/core/parameters.py rejects anything outside it.
 # semi_ripe is the 15 Hz / 6 s reference pulse. Amplitude and the per-class
 # frequencies are placeholders until field-tuned.
+#
+# A profile with `harvestable: false` (unripe) is NOT harvested automatically:
+# the dashboard shows the advisory and waits for operator confirmation. Only
+# if the operator confirms is the `override` pulse started; otherwise the
+# cycle ends as "not attempted" with no frequency/duration recorded.
 profiles:
   unripe:
     label: "Unripe (green)"
-    frequency_hz: 10
-    amplitude_mm: 8
-    duration_s: 6
-    advisory: "Low maturity detected — harvesting this branch now is not recommended."
+    harvestable: false
+    advisory: "Advisory: Unripe olives — not recommended for harvesting"
+    override:
+      frequency_hz: 17
+      amplitude_mm: 8
+      duration_s: 6
 
   turning:
     label: "Turning (green-yellow)"

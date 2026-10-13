@@ -41,3 +41,27 @@ def wait_until_not_harvesting(client, timeout_s: float = 6.0):
             return snapshot
         time.sleep(0.15)
     return snapshot
+
+
+@pytest.fixture()
+def force_class(monkeypatch):
+    """Make the simulated camera render a chosen maturity class, so tests do
+    not depend on the camera's random choice."""
+    import random
+
+    def _force(maturity_class: str) -> None:
+        monkeypatch.setattr(random, "choice", lambda seq: maturity_class)
+
+    return _force
+
+
+def wait_for_status(client, target: str, timeout_s: float = 4.0):
+    """Poll /api/status until it equals `target` (or the timeout elapses)."""
+    deadline = time.monotonic() + timeout_s
+    snapshot = None
+    while time.monotonic() < deadline:
+        snapshot = client.get("/api/status").get_json()
+        if snapshot["status"] == target:
+            break
+        time.sleep(0.1)
+    return snapshot

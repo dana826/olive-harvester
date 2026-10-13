@@ -36,6 +36,7 @@ class SystemStatus(str, Enum):
     IDLE = "idle"
     READY = "ready"
     ASSESSED = "assessed"
+    AWAITING_CONFIRMATION = "awaiting_confirmation"
     HARVESTING = "harvesting"
 
 
@@ -53,6 +54,9 @@ class AlertRecord:
 class HarvestController:
     TICK_INTERVAL_S = 0.5
     JAM_CHANCE_PER_TICK = 0.01
+    # Unripe (C0): seconds the operator has to confirm an override before the
+    # cycle ends as "not attempted".
+    CONFIRM_TIMEOUT_S = 10.0
 
     def __init__(
         self,
@@ -83,6 +87,9 @@ class HarvestController:
         self._alerts: List[AlertRecord] = []
         self._next_alert_id = 1
         self._last_session: Optional[Dict[str, Any]] = None
+        self._pulse_enabled = False
+        self._confirm_deadline: Optional[float] = None
+        self._override_params: Optional[Dict[str, float]] = None
 
         self._thread_lock = threading.Lock()
         self._stop_flag = threading.Event()
@@ -117,11 +124,15 @@ class HarvestController:
                 raise ValueError(f"Unknown branch: {branch_id!r}")
             if self._status == SystemStatus.HARVESTING:
                 raise RuntimeError("Cannot change branch while harvesting is in progress.")
+            if self._status == SystemStatus.AWAITING_CONFIRMATION:
+                raise RuntimeError("Confirm or decline the override (or wait for it to time out) first.")
 
             self._current_branch = branch_id
             self._current_capture = None
             self._recommended_params = None
             self._active_params = None
+            self._pulse_enabled = False
+            self._confirm_deadline = None
             self._status = SystemStatus.READY
 
         return self.snapshot()
@@ -132,6 +143,8 @@ class HarvestController:
                 raise RuntimeError("Select a branch before capturing an image.")
             if self._status == SystemStatus.HARVESTING:
                 raise RuntimeError("Cannot capture while harvesting is in progress.")
+            if self._status == SystemStatus.AWAITING_CONFIRMATION:
+                raise RuntimeError("Confirm or decline the override (or wait for it to time out) first.")
 
         # Deliberately done outside the lock: the (simulated) capture +
         # detection work takes real time and touches no shared state.
@@ -152,11 +165,23 @@ class HarvestController:
                 "duration_s": params.duration_s,
                 "label": params.label,
                 "advisory": params.advisory,
+                "pulse_enabled": params.harvestable,
+                "override_frequency_hz": (params.override or {}).get("frequency_hz"),
             }
             self._active_params = dict(self._recommended_params)
-            self._status = SystemStatus.ASSESSED
+            self._override_params = params.override
+            self._pulse_enabled = params.harvestable
             if params.advisory:
                 self._raise_alert("warning", "LOW_MATURITY", params.advisory)
+            if params.harvestable:
+                self._confirm_deadline = None
+                self._status = SystemStatus.ASSESSED
+            else:
+                # Unripe: no pulse is started. Wait for the operator to
+                # confirm the override; the tick loop ends the cycle as
+                # "not attempted" if CONFIRM_TIMEOUT_S passes first.
+                self._confirm_deadline = time.monotonic() + self.CONFIRM_TIMEOUT_S
+                self._status = SystemStatus.AWAITING_CONFIRMATION
 
         return self.snapshot()
 
@@ -177,14 +202,29 @@ class HarvestController:
                         active[key] = float(value)
                         has_override = True
             active["operator_override"] = has_override
-            self._active_params = active
+            self._begin_harvest(active)
 
-            self._actuator.start(active)
-            self._harvest_started_at = time.monotonic()
-            self._elapsed_s = 0.0
-            self._mass_g = 0.0
-            self._jam_raised_this_session = False
-            self._status = SystemStatus.HARVESTING
+        return self.snapshot()
+
+    def confirm_override(self) -> Dict[str, Any]:
+        """Unripe (C0) only: the operator explicitly confirms harvesting
+        despite the advisory. Enables the pulse and starts it at the
+        override frequency from the profile (17 Hz)."""
+        self._ensure_thread()
+        with self._lock:
+            if self._status != SystemStatus.AWAITING_CONFIRMATION or not self._override_params:
+                raise RuntimeError("No override is waiting for confirmation.")
+            override = self._override_params
+            check_frequency(override["frequency_hz"], "override")
+            active = dict(self._active_params)
+            active.update(
+                frequency_hz=float(override["frequency_hz"]),
+                amplitude_mm=float(override["amplitude_mm"]),
+                duration_s=float(override["duration_s"]),
+                operator_override=True,
+            )
+            self._pulse_enabled = True
+            self._begin_harvest(active)
 
         return self.snapshot()
 
@@ -192,6 +232,9 @@ class HarvestController:
         with self._lock:
             if self._status == SystemStatus.HARVESTING:
                 self._finish_harvest("stopped")
+            elif self._status == SystemStatus.AWAITING_CONFIRMATION:
+                # Operator declined the override.
+                self._finish_not_attempted("declined")
         return self.snapshot()
 
     def resolve_alert(self, alert_id: int) -> Dict[str, Any]:
@@ -218,6 +261,8 @@ class HarvestController:
                 "harvested_mass_g": round(self._mass_g, 1),
                 "elapsed_s": round(self._elapsed_s, 1),
                 "target_duration_s": (self._active_params or {}).get("duration_s"),
+                "pulse_enabled": self._pulse_enabled,
+                "confirmation": self._confirmation_info(),
                 "alerts": [asdict(a) for a in self._alerts],
                 "last_session": self._last_session,
                 "timestamp": datetime.now().isoformat(),
@@ -226,6 +271,63 @@ class HarvestController:
     # ------------------------------------------------------------------ #
     # Internal — caller must hold self._lock unless noted
     # ------------------------------------------------------------------ #
+
+    def _begin_harvest(self, active: Dict[str, Any]) -> None:
+        self._active_params = active
+        self._actuator.start(active)
+        self._harvest_started_at = time.monotonic()
+        self._elapsed_s = 0.0
+        self._mass_g = 0.0
+        self._jam_raised_this_session = False
+        self._confirm_deadline = None
+        self._status = SystemStatus.HARVESTING
+
+    def _confirmation_info(self) -> Optional[Dict[str, Any]]:
+        if self._status != SystemStatus.AWAITING_CONFIRMATION or self._confirm_deadline is None:
+            return None
+        return {
+            "required": True,
+            "timeout_s": self.CONFIRM_TIMEOUT_S,
+            "remaining_s": round(max(0.0, self._confirm_deadline - time.monotonic()), 1),
+            "override_frequency_hz": (self._override_params or {}).get("frequency_hz"),
+        }
+
+    def _finish_not_attempted(self, reason: str) -> None:
+        """End an unripe cycle without any pulse: no frequency, duration or
+        mass is recorded and the status is "not_attempted"."""
+        session = {
+            "branch_id": self._current_branch,
+            "maturity_class": self._active_params.get("maturity_class"),
+            "confidence": self._active_params.get("confidence"),
+            "frequency_hz": None,
+            "amplitude_mm": None,
+            "duration_target_s": None,
+            "duration_actual_s": None,
+            "harvested_mass_g": None,
+            "status": "not_attempted",
+            "operator_override": False,
+            "image_url": (self._current_capture or {}).get("image_url"),
+            "ended_at": datetime.now().isoformat(),
+        }
+        session["id"] = self._db.insert_session(session)
+        self._last_session = session
+
+        why = (
+            "the operator declined the override"
+            if reason == "declined"
+            else f"no operator confirmation within {self.CONFIRM_TIMEOUT_S:g} s"
+        )
+        self._raise_alert(
+            "info",
+            "NOT_ATTEMPTED",
+            f"Advisory displayed and no pulse was started ({why}) — cycle ended without harvesting.",
+        )
+
+        self._pulse_enabled = False
+        self._confirm_deadline = None
+        self._status = SystemStatus.READY
+        self._harvest_started_at = None
+        self._elapsed_s = 0.0
 
     def _raise_alert(self, severity: str, code: str, message: str) -> None:
         raised_at = datetime.now().isoformat()
@@ -281,6 +383,12 @@ class HarvestController:
         while not self._stop_flag.is_set():
             time.sleep(self.TICK_INTERVAL_S)
             with self._lock:
+                if (
+                    self._status == SystemStatus.AWAITING_CONFIRMATION
+                    and self._confirm_deadline is not None
+                    and time.monotonic() >= self._confirm_deadline
+                ):
+                    self._finish_not_attempted("timeout")
                 harvesting = self._status == SystemStatus.HARVESTING
                 if harvesting and self._harvest_started_at is not None:
                     self._elapsed_s = time.monotonic() - self._harvest_started_at
